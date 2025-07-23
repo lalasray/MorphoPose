@@ -1,4 +1,4 @@
-# MorPose
+# MorphoPose
 
 📅 Timeline: July 21 – August 15
 🔧 Goal: Fully working prototype of MorphPose (species-aware 3D pose estimation with dynamic joints and weak real supervision)
