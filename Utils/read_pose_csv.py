@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import json
+import pickle
 
 # Path to the 2D pose CSV file
 CSV_PATH = r"/home/lala/Documents/Data/MorphPose/output_akita/coordinates_2d_Akita_Albedo_A_Pose.csv"
@@ -219,6 +220,30 @@ def derive_base_dir(csv_path_2d):
     # Go up two levels from the CSV file (output_akita/coordinates_2d_...)
     return os.path.dirname(os.path.dirname(csv_path_2d))
 
+def save_datapoints_to_pickle(datapoints, out_dir, original_2d_csv):
+    """
+    Saves each datapoint as a pickle file in out_dir. Filename includes the original 2D CSV base name (with 'coordinates_2d_' removed), frame, camera, and focal.
+    The image is read as bytes and included in the datapoint under the key 'image_bytes'.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    base_csv_name = os.path.splitext(os.path.basename(original_2d_csv))[0].replace('coordinates_2d_', '')
+    for dp in datapoints:
+        frame = dp['frame']
+        camera = dp['camera']
+        focal = dp['focal_length']
+        # Compose a unique filename
+        fname = f"{base_csv_name}_frame{frame}_cam{camera}_focal{focal}.pkl"
+        fpath = os.path.join(out_dir, fname)
+        # Read image as bytes and include in datapoint
+        img_path = dp.get('image_path')
+        if img_path and os.path.exists(img_path):
+            with open(img_path, 'rb') as imgf:
+                dp['image_bytes'] = imgf.read()
+        else:
+            dp['image_bytes'] = None
+        with open(fpath, 'wb') as f:
+            pickle.dump(dp, f)
+
 if __name__ == "__main__":
     CSV_PATH_2D = CSV_PATH  # Ensure both variables are always the same
     CSV_PATH_3D = derive_csv_path_3d(CSV_PATH_2D)
@@ -233,3 +258,7 @@ if __name__ == "__main__":
     datapoints = add_image_paths_to_datapoints(datapoints, base_dir)
     print(f"Total datapoints: {len(datapoints)}")
     print(datapoints[:1])
+    # Save each datapoint as a pickle file with image bytes included
+    save_dir = os.path.join(base_dir, "datapoints_pickle")
+    save_datapoints_to_pickle(datapoints, save_dir, CSV_PATH_2D)
+    print(f"Saved each datapoint as a pickle file in {save_dir}")
