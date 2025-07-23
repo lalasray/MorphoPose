@@ -2,9 +2,8 @@ import os
 import pandas as pd
 import json
 import pickle
+import glob
 
-# Path to the 2D pose CSV file
-CSV_PATH = r"/home/lala/Documents/Data/MorphPose/output_akita/coordinates_2d_Akita_Albedo_A_Pose.csv"
 BONES_JSON_PATH = os.path.join(os.path.dirname(__file__), 'bones.json')
 
 def get_dog_name_and_action_from_filename(filename):
@@ -25,7 +24,7 @@ def get_dog_name_and_action_from_filename(filename):
             break
     return dog_name, action
 
-def read_pose_csv(csv_path=CSV_PATH):
+def read_pose_csv(csv_path):
     """
     Reads a pose CSV file and returns a pandas DataFrame.
     """
@@ -55,7 +54,7 @@ def generate_joint_presence_mask(all_bones, pose_bones):
     """
     return [1 if bone in pose_bones else 0 for bone in all_bones]
 
-def create_datapoints_by_camera_and_frame(df, csv_path=CSV_PATH, mask=None):
+def create_datapoints_by_camera_and_frame(df, csv_path, mask=None):
     """
     Creates a datapoint (dict) for each camera, frame, and focal length in the DataFrame.
     Supports both 2D (x, y) and 3D (x, y, z) pose files based on filename and columns.
@@ -245,20 +244,20 @@ def save_datapoints_to_pickle(datapoints, out_dir, original_2d_csv):
             pickle.dump(dp, f)
 
 if __name__ == "__main__":
-    CSV_PATH_2D = CSV_PATH  # Ensure both variables are always the same
-    CSV_PATH_3D = derive_csv_path_3d(CSV_PATH_2D)
-    base_dir = derive_base_dir(CSV_PATH_2D)
-    df2d = read_pose_csv(CSV_PATH_2D)
-    df3d = read_pose_csv(CSV_PATH_3D)
+    CSV_DIR = r"/home/lala/Documents/Data/MorphPose/output_akita"
+    csv_2d_files = glob.glob(os.path.join(CSV_DIR, "coordinates_2d_*.csv"))
+    save_dir = os.path.join(CSV_DIR, "datapoints_pickle")
     bones_superset = load_bones_superset()
     all_bones = bones_superset['all']
-    pose_bones = load_pose_bones(df2d)
-    mask = generate_joint_presence_mask(all_bones, pose_bones)
-    datapoints = create_datapoints_with_2d_3d(df2d, df3d, CSV_PATH_2D, CSV_PATH_3D, mask)
-    datapoints = add_image_paths_to_datapoints(datapoints, base_dir)
-    print(f"Total datapoints: {len(datapoints)}")
-    print(datapoints[:1])
-    # Save each datapoint as a pickle file with image bytes included
-    save_dir = os.path.join(base_dir, "datapoints_pickle")
-    save_datapoints_to_pickle(datapoints, save_dir, CSV_PATH_2D)
-    print(f"Saved each datapoint as a pickle file in {save_dir}")
+    for CSV_PATH_2D in csv_2d_files:
+        CSV_PATH_3D = derive_csv_path_3d(CSV_PATH_2D)
+        base_dir = derive_base_dir(CSV_PATH_2D)
+        df2d = read_pose_csv(CSV_PATH_2D)
+        df3d = read_pose_csv(CSV_PATH_3D)
+        pose_bones = load_pose_bones(df2d)
+        mask = generate_joint_presence_mask(all_bones, pose_bones)
+        datapoints = create_datapoints_with_2d_3d(df2d, df3d, CSV_PATH_2D, CSV_PATH_3D, mask)
+        datapoints = add_image_paths_to_datapoints(datapoints, base_dir)
+        print(f"{CSV_PATH_2D}: Total datapoints: {len(datapoints)}")
+        save_datapoints_to_pickle(datapoints, save_dir, CSV_PATH_2D)
+    print(f"Saved all datapoints as pickle files in {save_dir}")
