@@ -150,9 +150,79 @@ def create_datapoints_with_2d_3d(df2d, df3d, csv_path_2d, csv_path_3d, mask=None
         print("Both 2D and 3D CSVs must contain the required columns (case-insensitive). Columns in 2D:", df2d.columns, ", Columns in 3D:", df3d.columns)
         return []
 
+def find_image_path_for_datapoint(datapoint, base_dir):
+    """
+    Constructs the expected image path for a datapoint and checks both direct and nested locations.
+    If not found, prints a warning.
+    """
+    # Extract info
+    dog_name = datapoint['dog_name']
+    dog_action = datapoint['dog_action']
+    camera = datapoint['camera']
+    focal_length = datapoint['focal_length']
+    frame = datapoint['frame']
+    # Remove possible 'coordinates_2d_' prefix and '.csv' suffix from file_name_2d
+    # Compose action string (may contain underscores)
+    # Compose directory and filename
+    # Example: /.../output_Akita_Albedo_Fall/focal_150/Camera_backside/render_Akita_Albedo_Fall_Camera_backside_f150_frame0000.png
+    action_dir = dog_action if dog_action is not None else 'UnknownAction'
+    frame_str = str(frame).zfill(4)
+    filename = f"render_{dog_name}_{action_dir}_{camera}_f{focal_length}_frame{frame_str}.png"
+    # Direct path
+    dir_path1 = os.path.join(
+        base_dir,
+        f"output_{dog_name}_{action_dir}",
+        f"focal_{focal_length}",
+        f"{camera}"
+    )
+    image_path1 = os.path.join(dir_path1, filename)
+    # Nested path (e.g. output_akita/output_Akita_Albedo_A_Pose/...)
+    dir_path2 = os.path.join(
+        base_dir,
+        f"output_{dog_name.lower()}",
+        f"output_{dog_name}_{action_dir}",
+        f"focal_{focal_length}",
+        f"{camera}"
+    )
+    image_path2 = os.path.join(dir_path2, filename)
+    if os.path.exists(image_path1):
+        return image_path1
+    elif os.path.exists(image_path2):
+        return image_path2
+    else:
+        print(f"Image file does not exist: {image_path1} or {image_path2}")
+        return None
+
+def add_image_paths_to_datapoints(datapoints, base_dir):
+    """
+    Adds 'image_path' to each datapoint if the image exists.
+    """
+    for dp in datapoints:
+        dp['image_path'] = find_image_path_for_datapoint(dp, base_dir)
+    return datapoints
+
+def derive_csv_path_3d(csv_path_2d):
+    """
+    Given a 2D CSV path, derive the corresponding 3D CSV path by replacing 'coordinates_2d_' with 'coordinates_3d_'.
+    """
+    dir_name = os.path.dirname(csv_path_2d)
+    file_name_2d = os.path.basename(csv_path_2d)
+    file_name_3d = file_name_2d.replace('coordinates_2d_', 'coordinates_3d_')
+    return os.path.join(dir_name, file_name_3d)
+
+def derive_base_dir(csv_path_2d):
+    """
+    Given a 2D CSV path, derive the base directory (up to MorphPose).
+    E.g. /home/lala/Documents/Data/MorphPose/output_akita/coordinates_2d_Akita_Albedo_A_Pose.csv
+    -> /home/lala/Documents/Data/MorphPose
+    """
+    # Go up two levels from the CSV file (output_akita/coordinates_2d_...)
+    return os.path.dirname(os.path.dirname(csv_path_2d))
+
 if __name__ == "__main__":
-    CSV_PATH_2D = r"/home/lala/Documents/Data/MorphPose/output_akita/coordinates_2d_Akita_Albedo_A_Pose.csv"
-    CSV_PATH_3D = r"/home/lala/Documents/Data/MorphPose/output_akita/coordinates_3d_Akita_Albedo_A_Pose.csv"
+    CSV_PATH_2D = CSV_PATH  # Ensure both variables are always the same
+    CSV_PATH_3D = derive_csv_path_3d(CSV_PATH_2D)
+    base_dir = derive_base_dir(CSV_PATH_2D)
     df2d = read_pose_csv(CSV_PATH_2D)
     df3d = read_pose_csv(CSV_PATH_3D)
     bones_superset = load_bones_superset()
@@ -160,5 +230,6 @@ if __name__ == "__main__":
     pose_bones = load_pose_bones(df2d)
     mask = generate_joint_presence_mask(all_bones, pose_bones)
     datapoints = create_datapoints_with_2d_3d(df2d, df3d, CSV_PATH_2D, CSV_PATH_3D, mask)
+    datapoints = add_image_paths_to_datapoints(datapoints, base_dir)
     print(f"Total datapoints: {len(datapoints)}")
     print(datapoints[:1])
